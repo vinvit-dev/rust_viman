@@ -6,7 +6,7 @@ use rocket::http::Status;
 use rocket::serde::json::{Json, Value};
 use rocket::serde::json::serde_json::json;
 use viman::{establish_connection, get_all_users, get_user};
-use viman::models::{NewUser, User};
+use viman::models::{LoginInfo, NewUser, User};
 
 #[get("/")]
 fn hello() -> Value {
@@ -52,6 +52,19 @@ fn create_user(new_user: Json<NewUser>) -> Result<Json<User>, Status> {
     match user {
         Ok(Some(user)) => Ok(Json(user)),
         Ok(None) => Err(Status::UnprocessableEntity),
+        Err(_) => Err(Status::InternalServerError),
+    }
+}
+
+#[post("/login", data="<login_info>")]
+fn user_login(login_info: Json<LoginInfo>) -> Result<Json<User>, Status> {
+    let connection = &mut establish_connection();
+
+    let user = user_login(connection,  login_info.0);
+
+    match user {
+        Ok(Some(user)) => Ok(Json(user)),
+        Ok(None) => Err(Status::NotFound),
         Err(_) => Err(Status::InternalServerError),
     }
 }

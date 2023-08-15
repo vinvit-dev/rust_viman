@@ -19,3 +19,18 @@ pub struct NewUser {
     pub email: String,
     pub password: String,
 }
+
+#[derive(Selectable, Serialize, Deserialize)]
+#[diesel(table_name = users)]
+pub struct LoginInfo {
+    pub username: String,
+    pub password: String,
+}
+
+// #[derive(Selectable, Deserialize)]
+// pub struct JwtInfo {
+//     pub token: String,
+//     pub expire: i32,
+// }
+
+

@@ -1,16 +1,15 @@
 use std::env;
 use std::ops::Deref;
-use std::ptr::null;
 use argonautica::Hasher;
 
 use diesel::{PgConnection, Connection, RunQueryDsl, SelectableHelper, QueryDsl, ExpressionMethods, OptionalExtension, Insertable};
-use diesel::pg::Pg;
 use diesel::result::Error;
 use dotenvy::dotenv;
-use rocket::serde::json::Json;
+use rocket::form::validate::Len;
 
-use crate::models::{NewUser, User};
+use crate::models::{LoginInfo, NewUser, User};
 use crate::schema::users::dsl::users;
+use crate::schema::users::{email, password, username};
 
 pub mod models;
 pub mod schema;
@@ -24,8 +23,7 @@ pub fn establish_connection() -> PgConnection {
         .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
 }
 
-pub fn create_user(conn: &mut PgConnection, mut new_user: NewUser) -> Result<Option<User>, Error> {
-    use crate::schema::users;
+pub fn hash_password(password_to_hash: String) -> String {
     dotenv().ok();
 
     let secret = env::var("SECRET_KEY")
@@ -33,12 +31,29 @@ pub fn create_user(conn: &mut PgConnection, mut new_user: NewUser) -> Result<Opt
 
     let hesher = &mut Hasher::default();
     let hashed_password = hesher
-        .with_password(new_user.password)
+        .with_password(password_to_hash)
         .with_secret_key(secret)
         .hash()
         .unwrap();
 
-    new_user.password = hashed_password;
+    hashed_password
+}
+
+pub fn create_user(conn: &mut PgConnection, mut new_user: NewUser) -> Result<Option<User>, Error> {
+    use crate::schema::users;
+
+    let check_user = users
+        .filter(email.eq(&new_user.email))
+        .or_filter(username.eq(&new_user.username))
+        .select(User::as_select())
+        .load(conn)
+        .optional().unwrap();
+
+    if check_user.len() > 0 {
+        return Err(panic!("User with this name or email already exist!"));
+    }
+
+    new_user.password = hash_password(new_user.password);
 
     diesel::insert_into(users::table)
         .values(new_user)
@@ -53,6 +68,7 @@ pub fn get_all_users(conn: &mut PgConnection) -> Result<Option<Vec<User>>, Error
         .load(conn)
         .optional()
 }
+
 pub fn get_user(conn: &mut PgConnection, _id: i32) -> Result<Option<User>, Error> {
     use self::schema::users::dsl::*;
     users
@@ -60,5 +76,14 @@ pub fn get_user(conn: &mut PgConnection, _id: i32) -> Result<Option<User>, Error
         .select(User::as_select())
         .first(conn)
         .optional()
+}
 
+pub fn user_login(conn: &mut PgConnection, login_info: LoginInfo) -> Result<Option<User>, Error> {
+    let hashed_password = hash_password(login_info.password);
+    users
+        .filter(username.eq(login_info.username))
+        .filter(password.eq(hashed_password))
+        .select(User::as_select())
+        .first(conn)
+        .optional()
 }
