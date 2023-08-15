@@ -38,7 +38,7 @@ pub fn create_user(conn: &mut PgConnection, mut new_user: NewUser) -> Result<Opt
         .hash()
         .unwrap();
 
-   new_user.password = &hashed_password;
+    new_user.password = hashed_password;
 
     diesel::insert_into(users::table)
         .values(new_user)
