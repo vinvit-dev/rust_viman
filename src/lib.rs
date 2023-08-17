@@ -1,17 +1,14 @@
 use std::env;
-use std::ops::Deref;
 use argonautica::{Hasher, Verifier};
 
-use diesel::{PgConnection, Connection, RunQueryDsl, SelectableHelper, QueryDsl, ExpressionMethods, OptionalExtension, Insertable};
-use diesel::internal::derives::multiconnection::SelectStatementAccessor;
+use diesel::{PgConnection, Connection, RunQueryDsl, SelectableHelper, QueryDsl, ExpressionMethods, OptionalExtension};
 use diesel::result::Error;
 use dotenvy::dotenv;
 use rocket::form::validate::Len;
-use rocket::futures::StreamExt;
 
 use crate::models::{LoginInfo, NewUser, User, UserLogin};
 use crate::schema::users::dsl::users;
-use crate::schema::users::{email, password, username};
+use crate::schema::users::{email, username};
 
 pub mod models;
 pub mod schema;
@@ -31,8 +28,8 @@ pub fn hash_password(password_to_hash: String) -> String {
     let secret = env::var("SECRET_KEY")
         .expect("env variable SECRET_KEY must be set");
 
-    let hesher = &mut Hasher::default();
-    let hashed_password = hesher
+    let hasher = &mut Hasher::default();
+    let hashed_password = hasher
         .with_password(password_to_hash)
         .with_secret_key(secret)
         .hash()
@@ -69,7 +66,7 @@ pub fn create_user(conn: &mut PgConnection, mut new_user: NewUser) -> Result<Opt
         .optional().unwrap();
 
     if check_user.len() > 0 {
-        return Err(panic!("User with this name or email already exist!"));
+        panic!("User with this name or email already exist!");
     }
 
     new_user.password = hash_password(new_user.password);

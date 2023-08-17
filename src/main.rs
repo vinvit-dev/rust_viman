@@ -2,9 +2,7 @@
 extern crate rocket;
 
 use std::env;
-use chrono::{Local, Timelike};
-use diesel::{Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
-use diesel::result::Error;
+use chrono::{Local};
 use dotenvy::dotenv;
 use jsonwebtoken::{encode, EncodingKey, Header};
 use rocket::http::Status;
@@ -12,9 +10,7 @@ use rocket::response::Redirect;
 use rocket::serde::json::{Json, Value};
 use rocket::serde::json::serde_json::json;
 use viman::{establish_connection, get_all_users, get_user, login, verify_password};
-use viman::models::{Claims, JwtToken, LoginInfo, NewUser, User, UserLogin};
-use viman::schema::users::dsl::users;
-use viman::schema::users::username;
+use viman::models::{Claims, JwtToken, LoginInfo, NewUser, User};
 
 #[get("/")]
 fn index() -> Redirect {
