@@ -1,13 +1,15 @@
 use std::env;
 use std::ops::Deref;
-use argonautica::Hasher;
+use argonautica::{Hasher, Verifier};
 
 use diesel::{PgConnection, Connection, RunQueryDsl, SelectableHelper, QueryDsl, ExpressionMethods, OptionalExtension, Insertable};
+use diesel::internal::derives::multiconnection::SelectStatementAccessor;
 use diesel::result::Error;
 use dotenvy::dotenv;
 use rocket::form::validate::Len;
+use rocket::futures::StreamExt;
 
-use crate::models::{LoginInfo, NewUser, User};
+use crate::models::{LoginInfo, NewUser, User, UserLogin};
 use crate::schema::users::dsl::users;
 use crate::schema::users::{email, password, username};
 
@@ -37,6 +39,23 @@ pub fn hash_password(password_to_hash: String) -> String {
         .unwrap();
 
     hashed_password
+}
+
+pub fn verify_password(password_to_verify: &String, hashed_password: &String) -> bool {
+    dotenv().ok();
+
+    let secret = env::var("SECRET_KEY")
+        .expect("env variable SECRET_KEY must be set");
+
+    let verifier = &mut Verifier::default();
+    let result = verifier
+        .with_password(password_to_verify)
+        .with_hash(hashed_password)
+        .with_secret_key(secret)
+        .verify()
+        .unwrap();
+
+    result
 }
 
 pub fn create_user(conn: &mut PgConnection, mut new_user: NewUser) -> Result<Option<User>, Error> {
@@ -78,12 +97,10 @@ pub fn get_user(conn: &mut PgConnection, _id: i32) -> Result<Option<User>, Error
         .optional()
 }
 
-pub fn user_login(conn: &mut PgConnection, login_info: LoginInfo) -> Result<Option<User>, Error> {
-    let hashed_password = hash_password(login_info.password);
+pub fn login(conn: &mut PgConnection, login_info: LoginInfo) -> Result<Option<UserLogin>, Error> {
     users
-        .filter(username.eq(login_info.username))
-        .filter(password.eq(hashed_password))
-        .select(User::as_select())
+        .filter(username.eq(&login_info.username))
+        .select(UserLogin::as_select())
         .first(conn)
         .optional()
 }

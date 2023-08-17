@@ -20,17 +20,29 @@ pub struct NewUser {
     pub password: String,
 }
 
-#[derive(Selectable, Serialize, Deserialize)]
+#[derive(Selectable, Serialize, Deserialize, Clone)]
 #[diesel(table_name = users)]
 pub struct LoginInfo {
     pub username: String,
     pub password: String,
 }
 
-// #[derive(Selectable, Deserialize)]
-// pub struct JwtInfo {
-//     pub token: String,
-//     pub expire: i32,
-// }
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = users)]
+pub struct UserLogin {
+    pub id: i32,
+    pub username: String,
+    pub password: String,
+    pub status: bool
+}
 
-
+#[derive(Serialize, Deserialize)]
+pub struct JwtToken {
+    pub token: String,
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Claims {
+    pub id: i32,
+    pub password: String,
+    pub expire: i64,
+}
