@@ -1,114 +1,104 @@
-#[macro_use]
-extern crate rocket;
-
-use std::env;
-use chrono::{Local};
+use actix_web::web::Json;
+use actix_web::{delete, get, post, web, App, HttpResponse, HttpServer, Responder};
 use dotenvy::dotenv;
-use jsonwebtoken::{encode, EncodingKey, Header};
-use rocket::http::Status;
-use rocket::response::Redirect;
-use rocket::serde::json::{Json, Value};
-use rocket::serde::json::serde_json::json;
-use viman::{establish_connection, get_all_users, get_user, login, verify_password};
-use viman::models::{Claims, JwtToken, LoginInfo, NewUser, User};
+use serde_json::json;
+use viman::establish_connection;
+use viman::models::user::UserHander;
+use viman::models::{ErrorResponse, LoginInfo, NewUser};
 
-#[get("/")]
-fn index() -> Redirect {
-   Redirect::to("/api")
-}
-#[get("/")]
-fn api() -> Value {
+#[get("")]
+async fn api() -> impl Responder {
     let name: &str = env!("CARGO_PKG_NAME");
     let version: &str = env!("CARGO_PKG_VERSION");
 
-    json!({
-        "message": "Welcome to ".to_owned() + name + " api",
+    HttpResponse::Ok().json(json!({ "message": "Welcome to ".to_owned() + name + " api",
         "version": version,
-    })
+    }))
 }
 
-#[get("/users")]
-fn all_users() -> Result<Json<Vec<User>>, Status> {
+#[get("/list")]
+async fn user_list() -> impl Responder {
     let connection = &mut establish_connection();
-    let all_users = get_all_users(connection);
+    let all_users = UserHander::list(connection);
 
     match all_users {
-        Ok(Some(all_users)) => Ok(Json(all_users)),
-        Ok(None) => Err(Status::NoContent),
-        Err(_) => Err(Status::InternalServerError),
-    }
-}
-
-#[get("/user/<_id>")]
-fn user(_id: i32) -> Result<Json<User>, Status> {
-    let connection = &mut establish_connection();
-
-    let user = get_user(connection, _id);
-
-    match user {
-        Ok(Some(user)) => Ok(Json(user)),
-        Ok(None) => Err(Status::NotFound),
-        Err(_) => Err(Status::InternalServerError),
-    }
-}
-
-#[post("/user/register", data="<new_user>")]
-fn user_register(new_user: Json<NewUser>) -> Result<Json<User>, Status> {
-    let connection = &mut establish_connection();
-
-    let user = viman::create_user(connection, new_user.0);
-    match user {
-        Ok(Some(user)) => Ok(Json(user)),
-        Ok(None) => Err(Status::UnprocessableEntity),
-        Err(_) => Err(Status::InternalServerError),
-    }
-}
-
-#[post("/user/login", data="<login_info>")]
-fn user_login(login_info: Json<LoginInfo>) -> Result<Json<JwtToken>, Status> {
-    let connection = &mut establish_connection();
-
-    let login = login(connection,  login_info.clone().0);
-
-    match login {
-        Ok(Some(login)) => {
-            if login.status == true && verify_password(&login_info.password, &login.password) {
-                let claims = Claims {
-                    id: login.id,
-                    password: login.password,
-                    expire: Local::now().timestamp() + 24 * 3600,
-                };
-
-                dotenv().ok();
-
-                let secret = env::var("SECRET_JWT")
-                    .expect("env variable SECRET_JWT must be set");
-
-                let token = encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_ref())).unwrap();
-
-                Ok(Json(
-                    JwtToken {token}
-                ))
+        Ok(Some(all_users)) => {
+            if !all_users.is_empty() {
+                HttpResponse::Ok().json(Json(all_users))
             } else {
-                Err(Status::Forbidden)
+                HttpResponse::Ok().json(ErrorResponse::new("No users found.".to_string()))
             }
-        },
-        Ok(None) => Err(Status::NotFound),
-        Err(_) => Err(Status::InternalServerError),
+        }
+        Ok(None) => {
+            HttpResponse::NotFound().json(ErrorResponse::new("No users found.".to_string()))
+        }
+        Err(err) => HttpResponse::NotFound().json(Json(ErrorResponse::new(err.to_string()))),
     }
 }
 
-#[launch]
-fn rocket() -> _ {
-    rocket::build()
-        .mount("/api", routes![
-            api,
-            all_users,
-            user,
-            user_register,
-            user_login,
-        ])
-        .mount("/", routes![
-            index
-        ])
+#[get("/{id}")]
+async fn user_by_id(path: web::Path<i32>) -> impl Responder {
+    let connection = &mut establish_connection();
+    let _id = path.into_inner();
+
+    let user = UserHander::by_id(connection, _id);
+
+    match user {
+        Ok(Some(user)) => HttpResponse::Ok().json(Json(user)),
+        Ok(None) => HttpResponse::NotFound().json(Json(ErrorResponse::new("No data".to_string()))),
+        Err(_) => HttpResponse::NotFound().json(Json(ErrorResponse::new("Error".to_string()))),
+    }
+}
+
+#[delete("/{id}")]
+async fn user_delete(path: web::Path<i32>) -> impl Responder {
+    let connection = &mut establish_connection();
+    let _id = path.into_inner();
+    let result = UserHander::delete(connection, _id);
+    match result {
+        Ok(_) => HttpResponse::Ok().json(true),
+        Err(error) => HttpResponse::InternalServerError().json(error),
+    }
+}
+
+#[post("/register")]
+async fn user_registeration(new_user: Json<NewUser>) -> impl Responder {
+    let connection = &mut establish_connection();
+    let user = UserHander::create(connection, new_user.0);
+    match user {
+        Ok(Some(user)) => HttpResponse::Ok().json(Json(user)),
+        Ok(None) => HttpResponse::NotFound().json(Json(ErrorResponse::new("No data".to_string()))),
+        Err(_) => HttpResponse::NotFound().json(Json(ErrorResponse::new("Error".to_string()))),
+    }
+}
+
+#[post("/login")]
+async fn user_login(login_info: Json<LoginInfo>) -> impl Responder {
+    let connection = &mut establish_connection();
+    let login_result = UserHander::login(connection, login_info.0);
+    match login_result {
+        Ok(login_result) => HttpResponse::Ok().json(Json(login_result)),
+        Err(error) => HttpResponse::NotFound().json(Json(error)),
+    }
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    dotenv().ok();
+
+    HttpServer::new(|| {
+        App::new().service(web::redirect("/", "/api")).service(
+            web::scope("/api").service(api).service(
+                web::scope("/user")
+                    .service(user_list)
+                    .service(user_registeration)
+                    .service(user_login)
+                    .service(user_by_id)
+                    .service(user_delete),
+            ),
+        )
+    })
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
 }

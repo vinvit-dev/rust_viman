@@ -1,6 +1,19 @@
+use crate::schema::users;
 use diesel::prelude::*;
 use rocket::serde::{Deserialize, Serialize};
-use crate::schema::users;
+
+pub mod user;
+
+#[derive(Serialize)]
+pub struct ErrorResponse {
+    pub error: String,
+}
+
+impl ErrorResponse {
+    pub fn new(error: String) -> Self {
+        Self { error }
+    }
+}
 
 #[derive(Queryable, Selectable, Serialize)]
 #[diesel(table_name = users)]
@@ -33,7 +46,7 @@ pub struct UserLogin {
     pub id: i32,
     pub username: String,
     pub password: String,
-    pub status: bool
+    pub status: bool,
 }
 
 #[derive(Serialize, Deserialize)]
