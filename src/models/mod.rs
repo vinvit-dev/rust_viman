@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::{fmt, sync::Mutex};
 
 use crate::schema::users;
 use diesel::prelude::*;
@@ -10,7 +10,7 @@ pub struct AppState {
     pub db: Mutex<PgConnection>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct ErrorResponse {
     pub error: String,
 }
@@ -21,7 +21,13 @@ impl ErrorResponse {
     }
 }
 
-#[derive(Queryable, Selectable, Serialize)]
+impl fmt::Display for ErrorResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", serde_json::to_string(&self).unwrap())
+    }
+}
+
+#[derive(Queryable, Selectable, Serialize, Clone)]
 #[diesel(table_name = users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
@@ -63,5 +69,5 @@ pub struct JwtToken {
 pub struct Claims {
     pub id: i32,
     pub password: String,
-    pub expire: i64,
+    pub exp: i64,
 }

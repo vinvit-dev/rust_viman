@@ -1,6 +1,7 @@
-use std::env;
 use diesel::{Connection, PgConnection};
+use std::env;
 
+pub mod jwt_auth;
 pub mod models;
 pub mod password;
 pub mod schema;

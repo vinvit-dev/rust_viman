@@ -1,12 +1,14 @@
 use std::sync::Mutex;
 
 use actix_web::web::Json;
-use actix_web::{delete, get, post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{
+    delete, get, post, web, App, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder,
+};
 use dotenvy::dotenv;
 use serde_json::json;
-use viman::establish_connection;
 use viman::models::user::UserHander;
-use viman::models::{AppState, ErrorResponse, LoginInfo, NewUser};
+use viman::models::{AppState, ErrorResponse, LoginInfo, NewUser, User};
+use viman::{establish_connection, jwt_auth};
 
 #[get("")]
 async fn api() -> impl Responder {
@@ -47,6 +49,15 @@ async fn user_by_id(path: web::Path<i32>, data: web::Data<AppState>) -> impl Res
         Ok(Some(user)) => HttpResponse::Ok().json(Json(user)),
         Ok(None) => HttpResponse::NotFound().json(Json(ErrorResponse::new("No data".to_string()))),
         Err(_) => HttpResponse::NotFound().json(Json(ErrorResponse::new("Error".to_string()))),
+    }
+}
+#[get("/")]
+async fn user_page(req: HttpRequest, _: jwt_auth::JwtMiddleware) -> impl Responder {
+    let extensions = req.extensions();
+    let user = extensions.get::<User>();
+    match user {
+        Some(user) => HttpResponse::Ok().json(Json(user)),
+        None => HttpResponse::NotFound().json(json!({"status": "failed"})),
     }
 }
 
@@ -100,6 +111,7 @@ async fn main() -> std::io::Result<()> {
                         .service(user_registeration)
                         .service(user_login)
                         .service(user_by_id)
+                        .service(user_page)
                         .service(user_delete),
                 ),
             )

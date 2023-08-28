@@ -1,15 +1,13 @@
-use crate::models::{Claims, ErrorResponse, JwtToken, LoginInfo, NewUser, User, UserLogin};
-use crate::utils::get_secret_jwt;
+use crate::models::{ErrorResponse, JwtToken, LoginInfo, NewUser, User, UserLogin};
+use crate::utils::create_jwt;
 use crate::{
     password::Password,
     schema::users::{dsl::users, email, username},
 };
-use chrono::Local;
 use diesel::{
     result::Error, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl,
     SelectableHelper,
 };
-use jsonwebtoken::{encode, EncodingKey, Header};
 use rocket::form::validate::Len;
 
 pub struct UserHander;
@@ -78,20 +76,10 @@ impl UserHander {
                 if !Password::verify(&login_info.password, &user.password) {
                     return Err(ErrorResponse::new("Wrong password".to_string()));
                 }
-                let claims = Claims {
-                    id: user.id,
-                    password: user.password,
-                    expire: Local::now().timestamp() + 24 * 3600,
-                };
 
-                let token = encode(
-                    &Header::default(),
-                    &claims,
-                    &EncodingKey::from_secret(get_secret_jwt().as_ref()),
-                )
-                .unwrap();
-
-                Ok(JwtToken { token })
+                Ok(JwtToken {
+                    token: create_jwt(user),
+                })
             }
             Ok(None) => Err(ErrorResponse::new("User not found".to_string())),
             Err(_) => Err(ErrorResponse::new("Something wrong".to_string())),
