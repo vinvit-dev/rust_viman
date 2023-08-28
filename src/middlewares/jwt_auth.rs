@@ -1,8 +1,7 @@
 use std::future::{ready, Ready};
 
 use actix_web::{error::ErrorUnauthorized, http, web, FromRequest, HttpMessage};
-
-use crate::{
+use viman::{
     models::{user::UserHander, AppState, ErrorResponse, User},
     utils::verify_jwt,
 };
