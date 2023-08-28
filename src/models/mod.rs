@@ -1,8 +1,14 @@
+use std::sync::Mutex;
+
 use crate::schema::users;
 use diesel::prelude::*;
 use rocket::serde::{Deserialize, Serialize};
 
 pub mod user;
+
+pub struct AppState {
+    pub db: Mutex<PgConnection>,
+}
 
 #[derive(Serialize)]
 pub struct ErrorResponse {
