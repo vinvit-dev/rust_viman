@@ -1,26 +1,26 @@
-use actix_web::{routes, web};
+use actix_web::{delete, get, post, web};
 use actix_web::{web::Json, HttpMessage, HttpRequest, HttpResponse, Responder};
-use viman::models::{user::UserHander, AppState, ErrorResponse, LoginInfo, NewUser, User};
+use viman::models::app::AppState;
+use viman::models::errors::ErrorResponse;
+use viman::models::user::{LoginInfo, NewUser, User, UserHandler};
 
 use crate::middlewares::jwt_auth::JwtMiddleware;
 
 pub fn user_service(cfg: &mut web::ServiceConfig) {
     cfg.service(
-        web::scope("/user")
-            .service(user_list)
-            .service(user_registeration)
+        web::scope("")
+            .service(user_register)
             .service(user_login)
-            .service(user_by_id)
+            .service(user_list)
             .service(user_page)
+            .service(user_by_id)
             .service(user_delete),
     );
 }
 
-#[routes]
-#[get("/{id}")]
-#[get("/{id}/")]
-async fn user_list(data: web::Data<AppState>) -> impl Responder {
-    let all_users = UserHander::list(&mut data.db.lock().unwrap());
+#[get("/list")]
+async fn user_list(data: web::Data<AppState>, _: JwtMiddleware) -> impl Responder {
+    let all_users = UserHandler::list(&mut data.db.lock().unwrap());
 
     match all_users {
         Ok(Some(all_users)) => {
@@ -37,13 +37,15 @@ async fn user_list(data: web::Data<AppState>) -> impl Responder {
     }
 }
 
-#[routes]
 #[get("/{id}")]
-#[get("/{id}/")]
-async fn user_by_id(path: web::Path<i32>, data: web::Data<AppState>) -> impl Responder {
+async fn user_by_id(
+    path: web::Path<i32>,
+    data: web::Data<AppState>,
+    _: JwtMiddleware,
+) -> impl Responder {
     let _id = path.into_inner();
 
-    let user = UserHander::by_id(&mut data.db.lock().unwrap(), _id);
+    let user = UserHandler::by_id(&mut data.db.lock().unwrap(), _id);
 
     match user {
         Ok(Some(user)) => HttpResponse::Ok().json(Json(user)),
@@ -52,9 +54,21 @@ async fn user_by_id(path: web::Path<i32>, data: web::Data<AppState>) -> impl Res
     }
 }
 
-#[routes]
-#[get("")]
-#[get("/")]
+#[delete("/{id}")]
+async fn user_delete(
+    path: web::Path<i32>,
+    data: web::Data<AppState>,
+    _: JwtMiddleware,
+) -> impl Responder {
+    let _id = path.into_inner();
+    let result = UserHandler::delete(&mut data.db.lock().unwrap(), _id);
+    match result {
+        Ok(_) => HttpResponse::Ok().json(true),
+        Err(error) => HttpResponse::InternalServerError().json(error),
+    }
+}
+
+#[get("/me")]
 async fn user_page(req: HttpRequest, _: JwtMiddleware) -> impl Responder {
     let extensions = req.extensions();
     let user = extensions.get::<User>();
@@ -64,23 +78,9 @@ async fn user_page(req: HttpRequest, _: JwtMiddleware) -> impl Responder {
     }
 }
 
-#[routes]
-#[delete("/{id}")]
-#[delete("/{id}/")]
-async fn user_delete(path: web::Path<i32>, data: web::Data<AppState>) -> impl Responder {
-    let _id = path.into_inner();
-    let result = UserHander::delete(&mut data.db.lock().unwrap(), _id);
-    match result {
-        Ok(_) => HttpResponse::Ok().json(true),
-        Err(error) => HttpResponse::InternalServerError().json(error),
-    }
-}
-
-#[routes]
 #[post("/register")]
-#[post("/register/")]
-async fn user_registeration(new_user: Json<NewUser>, data: web::Data<AppState>) -> impl Responder {
-    let user = UserHander::create(&mut data.db.lock().unwrap(), new_user.0);
+async fn user_register(new_user: Json<NewUser>, data: web::Data<AppState>) -> impl Responder {
+    let user = UserHandler::create(&mut data.db.lock().unwrap(), new_user.0);
     match user {
         Ok(Some(user)) => HttpResponse::Ok().json(Json(user)),
         Ok(None) => HttpResponse::NotFound().json(Json(ErrorResponse::new("No data".to_string()))),
@@ -88,13 +88,11 @@ async fn user_registeration(new_user: Json<NewUser>, data: web::Data<AppState>) 
     }
 }
 
-#[routes]
 #[post("/login")]
-#[post("/login/")]
 async fn user_login(login_info: Json<LoginInfo>, data: web::Data<AppState>) -> impl Responder {
-    let login_result = UserHander::login(&mut data.db.lock().unwrap(), login_info.0);
+    let login_result = UserHandler::login(&mut data.db.lock().unwrap(), login_info.0);
     match login_result {
-        Ok(login_result) => HttpResponse::Ok().json(Json(login_result)),
-        Err(error) => HttpResponse::NotFound().json(Json(error)),
+        Ok(token) => HttpResponse::Ok().json(token),
+        Err(error) => HttpResponse::Unauthorized().json(error),
     }
 }

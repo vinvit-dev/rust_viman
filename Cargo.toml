@@ -10,15 +10,11 @@ argonautica = "0.2.0"
 chrono = "0.4.26"
 diesel = { version = "2.1.0", features = ["postgres"] }
 dotenvy = "0.15"
+env_logger = "0.10.0"
 jsonwebtoken = "8.3.0"
 serde = "1.0.183"
 serde_json = "1.0.105"
 tokio = { version = "1.0.0", features = ["rt", "rt-multi-thread", "macros"] }
 
-[dependencies.rocket]
-version = "=0.5.0-rc.3"
-features = ["json"]
-
 [profile.dev]
 debug = true
-

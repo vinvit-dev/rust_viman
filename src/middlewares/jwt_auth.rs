@@ -1,13 +1,17 @@
 use std::future::{ready, Ready};
 
 use actix_web::{error::ErrorUnauthorized, http, web, FromRequest, HttpMessage};
-use viman::{
-    models::{user::UserHander, AppState, ErrorResponse, User},
-    utils::verify_jwt,
-};
+use viman::models::app::AppState;
+use viman::models::errors::ErrorResponse;
+use viman::models::jwt::JwtHandler;
+use viman::models::user::{User, UserHandler};
 
-pub struct JwtMiddleware {
-    pub user: User,
+pub struct JwtMiddleware;
+
+impl Default for JwtMiddleware {
+    fn default() -> Self {
+        Self {}
+    }
 }
 
 impl FromRequest for JwtMiddleware {
@@ -29,15 +33,14 @@ impl FromRequest for JwtMiddleware {
             let error = ErrorResponse::new("Missing token".to_string());
             return ready(Err(ErrorUnauthorized(error)));
         }
-        println!("{}", token.clone().unwrap().to_string());
 
-        match verify_jwt(token.unwrap().to_string()) {
+        match JwtHandler::verify(token.unwrap().to_string()) {
             Ok(claims) => {
-                let user = UserHander::by_id(&mut data.db.lock().unwrap(), claims.id)
+                let user = UserHandler::by_id(&mut data.db.lock().unwrap(), claims.user.id)
                     .unwrap()
                     .unwrap();
                 req.extensions_mut().insert::<User>(user.clone());
-                ready(Ok(JwtMiddleware { user }))
+                ready(Ok(JwtMiddleware::default()))
             }
             Err(error) => {
                 return ready(Err(ErrorUnauthorized(error)));
