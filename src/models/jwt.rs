@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::ops::Add;
 
 use crate::models::errors::ErrorResponse;
@@ -33,7 +34,7 @@ impl JwtHandler {
 
         match token {
             Ok(token) => Ok(JwtToken { token, exp }),
-            Err(error) => Err(ErrorResponse::new(error.to_string())),
+            Err(error) => Err(ErrorResponse::new(error.to_string(), 502)),
         }
     }
 
@@ -44,7 +45,7 @@ impl JwtHandler {
             &Validation::new(Algorithm::HS256),
         ) {
             Ok(claims) => Ok(claims.claims),
-            Err(error) => Err(ErrorResponse::new(error.to_string())),
+            Err(error) => Err(ErrorResponse::new(error.to_string(), 502)),
         }
     }
 }

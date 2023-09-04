@@ -34,7 +34,7 @@ async fn main() -> std::io::Result<()> {
                     .service(web::scope("").configure(api_service)),
             )
     })
-    .bind(("127.0.0.1", 3001))?
+    .bind(("127.0.0.1", 3003))?
     .run()
     .await
 }

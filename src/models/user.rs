@@ -3,14 +3,15 @@ use crate::models::jwt::{JwtHandler, JwtToken};
 use crate::password::Password;
 use crate::schema::users::dsl::users;
 use crate::schema::users::{email, username};
-use diesel::result::Error;
 use diesel::{
     ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, Queryable,
     RunQueryDsl, Selectable, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use std::fmt::Debug;
 
-#[derive(Queryable, Selectable, Serialize, Clone)]
+#[derive(Queryable, Selectable, Serialize, Clone, Debug)]
 #[diesel(table_name = crate::schema::users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
@@ -47,28 +48,52 @@ pub struct UserLogin {
 pub struct UserHandler;
 
 impl UserHandler {
-    pub fn by_id(conn: &mut PgConnection, _id: i32) -> Result<Option<User>, Error> {
-        users
+    pub fn by_id(conn: &mut PgConnection, _id: i32) -> Result<User, ErrorResponse> {
+        let user = users
             .find(_id)
             .select(User::as_returning())
             .first(conn)
-            .optional()
-    }
+            .optional();
 
-    pub fn delete(conn: &mut PgConnection, _id: i32) -> Result<bool, ErrorResponse> {
-        let result = diesel::delete(users.find(_id)).execute(conn).optional();
-
-        match result {
-            Ok(_) => Ok(true),
-            Err(_) => Err(ErrorResponse::new("Fail to delete User".to_string())),
+        match user {
+            Ok(Some(user)) => Ok(user),
+            Ok(None) => Err(ErrorResponse::new("User not found".to_string(), 404)),
+            Err(error) => Err(ErrorResponse::new(error.to_string(), 502)),
         }
     }
 
-    pub fn list(conn: &mut PgConnection) -> Result<Option<Vec<User>>, Error> {
-        users.select(User::as_select()).load(conn).optional()
+    pub fn delete(conn: &mut PgConnection, _id: i32) -> Result<Value, ErrorResponse> {
+        let result = diesel::delete(users.find(_id)).execute(conn).optional();
+
+        match result {
+            Ok(result) => {
+                if result.unwrap() == 1 {
+                    Ok(json!({"status": true}))
+                } else {
+                    Err(ErrorResponse::new(
+                        "Can't delete this user".to_string(),
+                        404,
+                    ))
+                }
+            }
+            Err(error) => Err(ErrorResponse::new(error.to_string(), 502)),
+        }
     }
 
-    pub fn create(conn: &mut PgConnection, mut new_user: NewUser) -> Result<Option<User>, Error> {
+    pub fn list(conn: &mut PgConnection) -> Result<Vec<User>, ErrorResponse> {
+        let list = users
+            .select(User::as_select())
+            .limit(5)
+            .load(conn)
+            .optional();
+        match list {
+            Ok(Some(list)) => Ok(list),
+            Ok(None) => Err(ErrorResponse::new("No user found".to_string(), 404)),
+            Err(error) => Err(ErrorResponse::new(error.to_string(), 502)),
+        }
+    }
+
+    pub fn create(conn: &mut PgConnection, mut new_user: NewUser) -> Result<User, ErrorResponse> {
         let check_user = users
             .filter(email.eq(&new_user.email))
             .or_filter(username.eq(&new_user.username))
@@ -79,16 +104,23 @@ impl UserHandler {
             .unwrap();
 
         if check_user.len() > 0 {
-            panic!("User with this name or email already exist!");
+            return Err(ErrorResponse::new(
+                "User with this name or email already exist".to_string(),
+                404,
+            ));
         }
 
         new_user.password = Password::hash(new_user.password);
 
-        diesel::insert_into(users)
+        let result = diesel::insert_into(users)
             .values(new_user)
             .returning(User::as_returning())
             .get_result(conn)
-            .optional()
+            .optional();
+        match result {
+            Ok(result) => Ok(result.unwrap()),
+            Err(error) => Err(ErrorResponse::new(error.to_string(), 502)),
+        }
     }
 
     pub fn login(
@@ -103,17 +135,17 @@ impl UserHandler {
 
         match user {
             Ok(Some(user)) => {
-                if user.status != true {
-                    return Err(ErrorResponse::new("User are blocked.".to_string()));
-                }
                 if !Password::verify(&login_info.password, &user.password) {
-                    return Err(ErrorResponse::new("Wrong password".to_string()));
+                    return Err(ErrorResponse::new("Wrong password".to_string(), 401));
+                }
+                if user.status != true {
+                    return Err(ErrorResponse::new("User are blocked.".to_string(), 401));
                 }
 
                 JwtHandler::create(user)
             }
-            Ok(None) => Err(ErrorResponse::new("User not found".to_string())),
-            Err(_) => Err(ErrorResponse::new("Something wrong".to_string())),
+            Ok(None) => Err(ErrorResponse::new("User not found".to_string(), 404)),
+            Err(error) => Err(ErrorResponse::new(error.to_string(), 502)),
         }
     }
 }
