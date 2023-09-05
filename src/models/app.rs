@@ -1,6 +1,5 @@
-use diesel::PgConnection;
-use std::sync::Mutex;
+use sqlx::{Pool, Postgres};
 
 pub struct AppState {
-    pub db: Mutex<PgConnection>,
+    pub db: Pool<Postgres>,
 }

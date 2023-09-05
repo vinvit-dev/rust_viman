@@ -1,6 +1,7 @@
-use std::future::{ready, Ready};
+use std::future::Future;
+use std::pin::Pin;
 
-use actix_web::{http, web, FromRequest, HttpMessage};
+use actix_web::{http, web, FromRequest, HttpMessage, HttpRequest};
 use viman::models::app::AppState;
 use viman::models::errors::ErrorResponse;
 use viman::models::jwt::JwtHandler;
@@ -17,13 +18,9 @@ impl Default for JwtMiddleware {
 impl FromRequest for JwtMiddleware {
     type Error = ErrorResponse;
 
-    type Future = Ready<Result<Self, Self::Error>>;
+    type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
 
-    fn from_request(
-        req: &actix_web::HttpRequest,
-        _payload: &mut actix_web::dev::Payload,
-    ) -> Self::Future {
-        let data = req.app_data::<web::Data<AppState>>().unwrap();
+    fn from_request(req: &HttpRequest, _payload: &mut actix_web::dev::Payload) -> Self::Future {
         let token = req
             .headers()
             .get(http::header::AUTHORIZATION)
@@ -31,22 +28,33 @@ impl FromRequest for JwtMiddleware {
 
         if token.is_none() {
             let error = ErrorResponse::new("Missing token".to_string(), 401);
-            return ready(Err(error));
+            return Box::pin(async move { Err(error) });
         }
 
         match JwtHandler::verify(token.unwrap().to_string()) {
             Ok(claims) => {
-                let user = UserHandler::by_id(&mut data.db.lock().unwrap(), claims.user.id);
-                match user {
-                    Ok(user) => {
-                        req.extensions_mut().insert::<User>(user);
-                        ready(Ok(JwtMiddleware::default()))
+                let req = req.clone();
+                Box::pin(async move {
+                    let data = req.app_data::<web::Data<AppState>>().unwrap();
+                    let req = HttpRequest::clone(&req);
+                    let user = UserHandler::by_id(data.db.clone(), claims.user.id).await;
+                    match user {
+                        Ok(user) => {
+                            if user.status == false {
+                                return Err(ErrorResponse::new(
+                                    "User are blocked".to_string(),
+                                    401,
+                                ));
+                            }
+                            req.extensions_mut().insert::<User>(user);
+                            Ok(JwtMiddleware::default())
+                        }
+                        Err(error) => Err(error.status(401)),
                     }
-                    Err(error) => return ready(Err(error)),
-                }
+                })
             }
             Err(error) => {
-                return ready(Err(error));
+                return Box::pin(async move { Err(error.status(401)) });
             }
         }
     }

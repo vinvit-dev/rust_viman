@@ -1,18 +1,19 @@
 use actix_web::http::StatusCode;
-use diesel::{Connection, PgConnection};
+use sqlx::{Pool, Postgres};
 use std::env;
 
 pub mod models;
 pub mod password;
-pub mod schema;
 pub mod utils;
 
 pub fn status_code(code: u16) -> StatusCode {
     StatusCode::from_u16(code).unwrap()
 }
 
-pub fn establish_connection() -> PgConnection {
+pub async fn establish_connection() -> Pool<Postgres> {
     let database_url = env::var("DATABASE_URL").expect("env variable DATABASE_URL must be set");
-    PgConnection::establish(&database_url)
-        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
+    Pool::<Postgres>::connect(database_url.as_str())
+        .await
+        .unwrap()
 }
+

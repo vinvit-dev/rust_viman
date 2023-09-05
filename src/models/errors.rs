@@ -14,6 +14,12 @@ impl ErrorResponse {
     pub fn new(error: String, status: u16) -> Self {
         Self { error, status }
     }
+    pub fn status(self, status: u16) -> Self {
+        Self {
+            error: self.error,
+            status,
+        }
+    }
 }
 
 impl fmt::Display for ErrorResponse {
@@ -27,4 +33,3 @@ impl error::ResponseError for ErrorResponse {
         HttpResponseBuilder::new(status_code(self.status)).json(self)
     }
 }
-

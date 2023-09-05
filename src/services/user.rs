@@ -1,10 +1,9 @@
+use crate::middlewares::jwt_auth::JwtMiddleware;
 use actix_web::{delete, get, post, web, ResponseError};
 use actix_web::{web::Json, HttpMessage, HttpRequest, HttpResponse, Responder};
 use viman::models::app::AppState;
 use viman::models::errors::ErrorResponse;
 use viman::models::user::{LoginInfo, NewUser, User, UserHandler};
-
-use crate::middlewares::jwt_auth::JwtMiddleware;
 
 pub fn user_service(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -20,7 +19,7 @@ pub fn user_service(cfg: &mut web::ServiceConfig) {
 
 #[get("/list")]
 async fn user_list(data: web::Data<AppState>, _: JwtMiddleware) -> impl Responder {
-    let list = UserHandler::list(&mut data.db.lock().unwrap());
+    let list = UserHandler::list(data.db.clone()).await;
     match list {
         Ok(list) => HttpResponse::Ok().json(list),
         Err(error) => error.error_response(),
@@ -35,7 +34,7 @@ async fn user_by_id(
 ) -> impl Responder {
     let _id = path.into_inner();
 
-    let user = UserHandler::by_id(&mut data.db.lock().unwrap(), _id);
+    let user = UserHandler::by_id(data.db.clone(), _id).await;
 
     match user {
         Ok(user) => HttpResponse::Ok().json(user),
@@ -50,7 +49,7 @@ async fn user_delete(
     _: JwtMiddleware,
 ) -> impl Responder {
     let _id = path.into_inner();
-    let result = UserHandler::delete(&mut data.db.lock().unwrap(), _id);
+    let result = UserHandler::delete(data.db.clone(), _id).await;
     match result {
         Ok(result) => HttpResponse::Ok().json(result),
         Err(error) => error.error_response(),
@@ -69,7 +68,7 @@ async fn user_page(req: HttpRequest, _: JwtMiddleware) -> impl Responder {
 
 #[post("/register")]
 async fn user_register(new_user: Json<NewUser>, data: web::Data<AppState>) -> impl Responder {
-    let user = UserHandler::create(&mut data.db.lock().unwrap(), new_user.0);
+    let user = UserHandler::create(data.db.clone(), new_user.0).await;
     match user {
         Ok(user) => HttpResponse::Ok().json(user),
         Err(error) => error.error_response(),
@@ -78,7 +77,7 @@ async fn user_register(new_user: Json<NewUser>, data: web::Data<AppState>) -> im
 
 #[post("/login")]
 async fn user_login(login_info: Json<LoginInfo>, data: web::Data<AppState>) -> impl Responder {
-    let login_result = UserHandler::login(&mut data.db.lock().unwrap(), login_info.0);
+    let login_result = UserHandler::login(data.db.clone(), login_info.0).await;
     match login_result {
         Ok(token) => HttpResponse::Ok().json(token),
         Err(error) => error.error_response(),
