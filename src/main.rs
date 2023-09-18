@@ -1,5 +1,7 @@
+use actix_cors::Cors;
 use actix_web::middleware::{NormalizePath, TrailingSlash};
 use actix_web::{web, App, HttpServer};
+use viman::database::Database;
 
 use crate::services::api::api_service;
 use crate::services::user::user_service;
@@ -17,12 +19,22 @@ async fn main() -> std::io::Result<()> {
 
     let pool = establish_connection().await;
 
-    let app_data = web::Data::new(AppState { db: pool.clone() });
+    let app_data = web::Data::new(AppState {
+        db: Database {
+            connection: pool.clone(),
+        },
+    });
 
     HttpServer::new(move || {
         App::new()
             .app_data(app_data.clone())
             .wrap(NormalizePath::new(TrailingSlash::MergeOnly))
+            .wrap(
+                Cors::default()
+                    .allow_any_method()
+                    .allow_any_header()
+                    .allowed_origin("http://127.0.0.1:8080"),
+            )
             .service(web::redirect("/", "/api"))
             .service(
                 web::scope("/api")

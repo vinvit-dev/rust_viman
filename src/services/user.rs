@@ -12,13 +12,12 @@ pub fn user_service(cfg: &mut web::ServiceConfig) {
             .service(user_login)
             .service(user_list)
             .service(user_page)
-            .service(user_by_id)
             .service(user_delete),
     );
 }
 
 #[get("/list")]
-async fn user_list(data: web::Data<AppState>, _: JwtMiddleware) -> impl Responder {
+async fn user_list(data: web::Data<AppState>) -> impl Responder {
     let list = UserHandler::list(data.db.clone()).await;
     match list {
         Ok(list) => HttpResponse::Ok().json(list),

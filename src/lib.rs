@@ -2,6 +2,7 @@ use actix_web::http::StatusCode;
 use sqlx::{Pool, Postgres};
 use std::env;
 
+pub mod database;
 pub mod models;
 pub mod password;
 pub mod utils;
@@ -16,4 +17,3 @@ pub async fn establish_connection() -> Pool<Postgres> {
         .await
         .unwrap()
 }
-

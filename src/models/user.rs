@@ -1,9 +1,10 @@
+use crate::database::Database;
 use crate::models::errors::ErrorResponse;
 use crate::models::jwt::{JwtHandler, JwtToken};
 use crate::password::Password;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sqlx::{FromRow, Pool, Postgres};
+use sqlx::FromRow;
 use std::fmt::Debug;
 
 #[derive(Serialize, Clone, Debug, FromRow)]
@@ -38,11 +39,11 @@ pub struct UserLogin {
 pub struct UserHandler;
 
 impl UserHandler {
-    pub async fn by_id(conn: Pool<Postgres>, _id: i32) -> Result<User, ErrorResponse> {
+    pub async fn by_id(db: Database, _id: i32) -> Result<User, ErrorResponse> {
         let q = "SELECT id, username, email, status FROM users WHERE id = $1";
         let user = sqlx::query_as::<_, User>(q)
             .bind(_id)
-            .fetch_one(&conn)
+            .fetch_one(&db.connection)
             .await;
 
         match user {
@@ -51,9 +52,9 @@ impl UserHandler {
         }
     }
 
-    pub async fn delete(conn: Pool<Postgres>, _id: i32) -> Result<Value, ErrorResponse> {
+    pub async fn delete(db: Database, _id: i32) -> Result<Value, ErrorResponse> {
         let q = "DELETE FROM users WHERE id = $1";
-        let result = sqlx::query(q).bind(_id).execute(&conn).await;
+        let result = sqlx::query(q).bind(_id).execute(&db.connection).await;
 
         match result {
             Ok(result) => {
@@ -68,25 +69,22 @@ impl UserHandler {
         }
     }
 
-    pub async fn list(conn: Pool<Postgres>) -> Result<Vec<User>, ErrorResponse> {
+    pub async fn list(db: Database) -> Result<Vec<User>, ErrorResponse> {
         let q = "SELECT id, username, email, status FROM users";
-        let list = sqlx::query_as::<_, User>(q).fetch_all(&conn).await;
+        let list = sqlx::query_as::<_, User>(q).fetch_all(&db.connection).await;
         match list {
             Ok(list) => Ok(list),
             Err(error) => Err(ErrorResponse::new(error.to_string(), 500)),
         }
     }
 
-    pub async fn create(
-        conn: Pool<Postgres>,
-        mut new_user: NewUser,
-    ) -> Result<User, ErrorResponse> {
+    pub async fn create(db: Database, mut new_user: NewUser) -> Result<User, ErrorResponse> {
         let q = "SELECT id, username, email, status FROM users WHERE username = $1 OR email = $2";
 
         let check_user = match sqlx::query_as::<_, User>(q)
             .bind(&new_user.username)
             .bind(&new_user.email)
-            .fetch_all(&conn)
+            .fetch_all(&db.connection)
             .await
         {
             Ok(check_user) => check_user,
@@ -109,7 +107,7 @@ impl UserHandler {
             .bind(new_user.username)
             .bind(new_user.email)
             .bind(new_user.password)
-            .fetch_one(&conn)
+            .fetch_one(&db.connection)
             .await;
 
         match result {
@@ -118,14 +116,11 @@ impl UserHandler {
         }
     }
 
-    pub async fn login(
-        conn: Pool<Postgres>,
-        login_info: LoginInfo,
-    ) -> Result<JwtToken, ErrorResponse> {
+    pub async fn login(db: Database, login_info: LoginInfo) -> Result<JwtToken, ErrorResponse> {
         let q = "SELECT id, username, status, password FROM users WHERE username = $1";
         let user = sqlx::query_as::<_, UserLogin>(q)
             .bind(&login_info.username)
-            .fetch_one(&conn)
+            .fetch_one(&db.connection)
             .await;
 
         match user {
