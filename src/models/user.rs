@@ -69,15 +69,6 @@ impl UserHandler {
         }
     }
 
-    pub async fn list(db: Database) -> Result<Vec<User>, ErrorResponse> {
-        let q = "SELECT id, username, email, status FROM users";
-        let list = sqlx::query_as::<_, User>(q).fetch_all(&db.connection).await;
-        match list {
-            Ok(list) => Ok(list),
-            Err(error) => Err(ErrorResponse::new(error.to_string(), 500)),
-        }
-    }
-
     pub async fn create(db: Database, mut new_user: NewUser) -> Result<User, ErrorResponse> {
         let q = "SELECT id, username, email, status FROM users WHERE username = $1 OR email = $2";
 
